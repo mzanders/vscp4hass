@@ -51,13 +51,13 @@ class vscpLight(LightEntity, Channel):
         self._channel = channel
 
         registers = await read_reg(node.bus, node.nickname, channel, 0, 34)
-        self._enabled = (registers[0x02] != 0x00)
-        self._supports_brightness = (registers[0x03] & 0x01 == 0x01)
-        self._supports_flash = (registers[0x03] & 0x08 == 0x08)
-        self._state = (registers[0x04] != 0x00)
-        self._zone = int(registers[0x05])
-        self._subzone = int(registers[0x06])
-        self._brightness = int(registers[0x07])
+        self._enabled = (registers[0x03] != 0x00)
+        self._supports_brightness = (registers[0x04] & 0x01 == 0x01)
+        self._supports_flash = (registers[0x04] & 0x08 == 0x08)
+        self._state = (registers[0x05] != 0x00)
+        self._zone = int(registers[0x06])
+        self._subzone = int(registers[0x07])
+        self._brightness = int(registers[0x08])
         self._name = registers[16:33].decode().rstrip('/x0')
         self.entity_id = "light.vscp.{}.{}".format(self._node.guid, self._channel)
 

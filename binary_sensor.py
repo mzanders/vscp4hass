@@ -41,9 +41,9 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
         self._channel = channel
 
         registers = await read_reg(node.bus, node.nickname, channel, 0, 34)
-        self._enabled = (registers[0x02] != 0x00)
-        self._state = (registers[0x03] != 0x00)
-        self._class_id = int(registers[0x04])
+        self._enabled = (registers[0x03] != 0x00)
+        self._state = (registers[0x04] != 0x00)
+        self._class_id = int(registers[0x05])
         self._name = registers[16:33].decode().rstrip('/x0')
         self.entity_id = "binary_sensor.vscp.{}.{}".format(self._node.guid, self._channel)
 
