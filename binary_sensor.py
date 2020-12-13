@@ -1,7 +1,7 @@
 import logging
 
 from .channel import Channel
-from .const import VSCP4HASS_DOMAIN
+from .const import DOMAIN
 
 from .vscp.const import (CLASS_INFORMATION, EVENT_INFORMATION_ON, EVENT_INFORMATION_OFF)
 from .vscp.util import read_reg
@@ -24,7 +24,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         return
 
     # Setup connection with devices/cloud
-    gw = hass.data[VSCP4HASS_DOMAIN]
+    gw = hass.data[DOMAIN]
 
     for node in gw.nodes.values():
         async_add_entities(node.get_channels(IDENTIFIER))
@@ -32,8 +32,8 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     return True
 
 
-class VSCP4HASSBinarySensor(BinarySensorEntity, Channel):
-    """Representation of an VSCP4HASS binary sensor."""
+class vscpBinarySensor(BinarySensorEntity, Channel):
+    """Representation of an VSCP binary sensor."""
     @classmethod
     async def new(cls, node, channel):
         self = cls()
@@ -45,6 +45,7 @@ class VSCP4HASSBinarySensor(BinarySensorEntity, Channel):
         self._state = (registers[0x03] != 0x00)
         self._class_id = int(registers[0x04])
         self._name = registers[16:33].decode().rstrip('/x0')
+        self.entity_id = "binary_sensor.vscp.{}.{}".format(self._node.guid, self._channel)
 
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
@@ -74,16 +75,16 @@ class VSCP4HASSBinarySensor(BinarySensorEntity, Channel):
         return True
 
     @property
+    def unique_id(self):
+        return "BS-{}-{}".format(self._node.guid, self._channel)
+
+    @property
     def should_poll(self):
         return False
 
     async def _handle_onoff_event(self, event):
         self._state = (event.vscp_type == EVENT_INFORMATION_ON)
         self.async_schedule_update_ha_state()
-
-    @property
-    def unique_id(self):
-        return "BS-{}-{}".format(self._node.guid, self._channel)
 
     @property
     def device_class(self):

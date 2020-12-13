@@ -1,7 +1,7 @@
 {
-  "domain": "vscp4hass",
-  "name": "vscp4hass",
-  "documentation": "https://github.com/none/so/far",
+  "domain": "vscp",
+  "name": "VSCP",
+  "documentation": "https://github.com/mzanders/vscp4hass",
   "config_flow": false,
   "dependencies": [],
   "codeowners": [],

@@ -1,11 +1,11 @@
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from .gateway import Gateway
-from .light import VSCP4HASSLight
-from .binary_sensor import VSCP4HASSBinarySensor
-from .const import VSCP4HASS_DOMAIN
+from .light import vscpLight
+from .binary_sensor import vscpBinarySensor
+from .const import DOMAIN as VSCP_DOMAIN
 
 """Support for VSCP4HASS."""
-DOMAIN = VSCP4HASS_DOMAIN
+DOMAIN = VSCP_DOMAIN
 
 
 async def async_setup(hass, config):

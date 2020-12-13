@@ -11,7 +11,7 @@ from homeassistant.components.light import (
 
 from .channel import Channel
 
-from .const import VSCP4HASS_DOMAIN
+from .const import DOMAIN
 
 from .vscp.event import Event
 from .vscp.const import (CLASS_CONTROL, CLASS_INFORMATION,
@@ -35,14 +35,14 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         return
 
     # Setup connection with devices/cloud
-    gw = hass.data[VSCP4HASS_DOMAIN]
+    gw = hass.data[DOMAIN]
 
     for node in gw.nodes.values():
         async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
     return True
 
 
-class VSCP4HASSLight(LightEntity, Channel):
+class vscpLight(LightEntity, Channel):
     """Representation of a VSCP4HASS Light."""
     @classmethod
     async def new(cls, node, channel):
@@ -59,6 +59,7 @@ class VSCP4HASSLight(LightEntity, Channel):
         self._subzone = int(registers[0x06])
         self._brightness = int(registers[0x07])
         self._name = registers[16:33].decode().rstrip('/x0')
+        self.entity_id = "light.vscp.{}.{}".format(self._node.guid, self._channel)
 
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
@@ -69,6 +70,10 @@ class VSCP4HASSLight(LightEntity, Channel):
     @property
     def enabled(self):
         return self._enabled
+
+    @property
+    def unique_id(self):
+        return "LI-{}-{}".format(self._node.guid, self._channel)
 
     @property
     def name(self):
@@ -87,10 +92,6 @@ class VSCP4HASSLight(LightEntity, Channel):
     @classmethod
     def identifier(cls):
         return IDENTIFIER
-
-    @property
-    def unique_id(self):
-        return "LI-{}-{}".format(self._node.guid, self._channel)
 
     @property
     def supported_features(self):
