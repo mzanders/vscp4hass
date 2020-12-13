@@ -1,0 +1,9 @@
+{
+  "domain": "vscp4hass",
+  "name": "vscp4hass",
+  "documentation": "https://github.com/none/so/far",
+  "config_flow": false,
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": []
+}
