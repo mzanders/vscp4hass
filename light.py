@@ -60,12 +60,17 @@ class vscpLight(LightEntity, Channel):
         self._brightness = int(registers[0x08])
         self._name = registers[16:33].decode().rstrip('/x0')
         self.entity_id = "light.vscp.{}.{}".format(self._node.guid, self._channel)
-
-        await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
-        await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
-        if self._supports_brightness:
-            await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_LEVEL, self._handle_level_event)
         return self
+
+    async def async_added_to_hass(self):
+        super().async_added_to_hass()
+        await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_ON,
+                                          self._handle_onoff_event)
+        await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF,
+                                          self._handle_onoff_event)
+        if self._supports_brightness:
+            await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_LEVEL,
+                                              self._handle_level_event)
 
     @property
     def enabled(self):

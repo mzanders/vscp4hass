@@ -47,9 +47,12 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
         self._name = registers[16:33].decode().rstrip('/x0')
         self.entity_id = "binary_sensor.vscp.{}.{}".format(self._node.guid, self._channel)
 
+        return self
+
+    async def async_added_to_hass(self):
+        super().async_added_to_hass()
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
         await self._node.bus.sub_ch_event(node.nickname, channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
-        return self
 
     @property
     def is_on(self):
