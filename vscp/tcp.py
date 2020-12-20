@@ -1,6 +1,9 @@
 import asyncio
 from .event import Event
 from .const import (DEF_HOST, DEF_PORT, DEF_USER, DEF_PASSWORD)
+import logging
+
+logger = logging.getLogger(__name__)
 
 # internal helpers
 def _strip_line(line):
@@ -86,7 +89,7 @@ class TCP:
         return line, list
 
     async def _putcmd(self, line):
-        if self.debuglevel: print('*cmd*', repr(line))
+        logger.debug('*cmd* ', repr(line))
         line = line + CRLF
         self._writer.write(line.encode())
         await self._writer.drain()
@@ -120,6 +123,7 @@ class TCP:
         """Send event to the daemon"""
         if not isinstance(event_l, Event):
             raise ProtoError('event should be of class event')
+        logger.debug('TX: {}'.format(event_l))
         return await self._shortcmd('SEND ' + repr(event_l))
 
     async def retr(self, num=1):
@@ -163,17 +167,24 @@ class TCP:
         return resp
 
     async def rcv_task(self, callback):
-        try:
-            while True:
+        while True:
+            try:
                 line = await self._reader.readline()
-                if line.startswith(b'+') or len(line) == 0:
-                    pass
-                elif line.startswith(b'-'):
-                    raise ProtoError(resp)
-                else:
-                    await callback(Event.from_string(line.decode()))
-        except asyncio.CancelledError:
-            return
+            except asyncio.CancelledError:
+                return
+            except:
+                logger.exception('Unhandled exception in receive loop!!')
+            if line.startswith(b'+') or len(line) == 0:
+                pass
+            elif line.startswith(b'-'):
+                raise ProtoError(resp)
+            else:
+                try:
+                    event = Event.from_string(line.decode())
+                    logger.debug('RX: {}'.format(event))
+                    await callback(event)
+                except Exception as e:
+                    logger.exception('Unhandled exception: {}'.format(e))
 
     async def rcvloop(self, callback):
         """start a receive loop, calling the callback for every event"""
