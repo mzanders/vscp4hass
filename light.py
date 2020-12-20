@@ -20,7 +20,7 @@ from .vscp.const import (CLASS_CONTROL, CLASS_INFORMATION,
 
 from .vscp.util import read_reg
 
-_LOGGER = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 IDENTIFIER = 'LI'
 
@@ -113,6 +113,7 @@ class vscpLight(LightEntity, Channel):
 
     async def async_turn_on(self, **kwargs):
         """Instruct the light to turn on."""
+        logger.debug('Turning on {}'.format(self.name))
         flash_cmd = 0
         if ATTR_FLASH in kwargs:
             if kwargs[ATTR_FLASH] == 'short':
@@ -139,6 +140,7 @@ class vscpLight(LightEntity, Channel):
 
     async def async_turn_off(self, **kwargs):
         """Instruct the light to turn off."""
+        logger.debug('Turning off {}'.format(self.name))
         ev = Event(vscp_class=CLASS_CONTROL,
                    vscp_type=EVENT_CONTROL_TURN_OFF,
                    data=struct.pack('>BBB', 0, self._zone, self._subzone))
@@ -149,6 +151,7 @@ class vscpLight(LightEntity, Channel):
         return False
 
     async def _handle_onoff_event(self, event):
+        logger.debug('Got on/off for {}'.format(self.name))
         self._state = (event.vscp_type == EVENT_INFORMATION_ON)
         self.async_schedule_update_ha_state()
 
