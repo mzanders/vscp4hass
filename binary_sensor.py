@@ -50,7 +50,7 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
         return self
 
     async def async_added_to_hass(self):
-        super().async_added_to_hass()
+        await super().async_added_to_hass()
         await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
         await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
 
