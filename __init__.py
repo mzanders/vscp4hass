@@ -1,18 +1,47 @@
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.const import (EVENT_HOMEASSISTANT_STOP,
+                                 CONF_HOST,
+                                 CONF_PORT,
+                                 CONF_USERNAME,
+                                 CONF_PASSWORD,
+                                 CONF_DISCOVERY)
+
 from .gateway import Gateway
 from .light import vscpLight
 from .binary_sensor import vscpBinarySensor
-from .const import DOMAIN as VSCP_DOMAIN
+import homeassistant.helpers.config_validation as cv
+from .const import (DOMAIN, DEFAULT_HOST, DEFAULT_PORT)
+import voluptuous as vol
 
-"""Support for VSCP4HASS."""
-DOMAIN = VSCP_DOMAIN
+"""Support for VSCP in HASS."""
 
+CONFIG_SCHEMA = vol.Schema(
+    {
+        DOMAIN: vol.Schema(
+            {
+                vol.Required(CONF_HOST): cv.string,
+                vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
+                vol.Optional(CONF_USERNAME): cv.string,
+                vol.Optional(CONF_PASSWORD): cv.string,
+                vol.Optional(CONF_DISCOVERY, default=True): cv.boolean
+            }
+        )
+    },
+    extra=vol.ALLOW_EXTRA
+)
 
 async def async_setup(hass, config):
     """controller setup code"""
-    gw = Gateway()
+    conf = config.get(DOMAIN)
+    host = conf.get(CONF_HOST)
+    port = conf.get(CONF_PORT)
+    user = conf.get(CONF_USERNAME)
+    password = conf.get(CONF_PASSWORD)
+
+    gw = Gateway(host=host, port=port, user=user, password=password)
     await gw.connect()
-    await gw.scan()
+
+    if conf.get(CONF_DISCOVERY):
+        await gw.scan()
 
     async def on_hass_stop(event):
         """Close connection when hass stops."""

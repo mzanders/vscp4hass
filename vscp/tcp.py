@@ -40,26 +40,26 @@ class TCP:
         if (user == None) != (password == None):
             raise ParError('User and password should both be None or defined')
             
-        self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
+        self._host = host
+        self._port = port
+        self._user = user
+        self._password = password
         self.debuglevel = 0
         self._rcvloop = False
 
     async def connect(self):
         """Connect to a vscpd instance"""
         self._reader, self._writer = \
-            await asyncio.open_connection(self.host, self.port)
+            await asyncio.open_connection(self._host, self._port)
         self._welcome = await self._getlongresp()
         
-        if self.user != None:
+        if self._user != None:
             try:
                 await self.user()
             except ProtoError:
                 raise CredError('Invalid username')
         
-        if self.password != None:
+        if self._password != None:
             try:
                 await self.password()
             except ProtoError:
@@ -89,7 +89,7 @@ class TCP:
         return line, list
 
     async def _putcmd(self, line):
-        logger.debug('*cmd* ', repr(line))
+        logger.debug('*cmd* ' + repr(line))
         line = line + CRLF
         self._writer.write(line.encode())
         await self._writer.drain()
@@ -136,12 +136,12 @@ class TCP:
     async def user(self):
         if self._rcvloop:
             raise RcvloopError
-        return await self._shortcmd('USER ' + self.user)
+        return await self._shortcmd('USER ' + self._user)
 
     async def password(self):
         if self._rcvloop:
             raise RcvloopError
-        return await self._shortcmd('PASS ' + self.password)
+        return await self._shortcmd('PASS ' + self._password)
 
     async def chkdata(self):
         if self._rcvloop:
