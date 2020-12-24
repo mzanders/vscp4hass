@@ -39,7 +39,7 @@ class Gateway(TCP):
         await self.clrall()
         await self.rcvloop(self._process_event)
 
-    async def scan(self):
+    async def scan(self, updater):
         """Scan a gateway for devices, build the channel lists"""
         await self.quitloop()
 
@@ -47,5 +47,5 @@ class Gateway(TCP):
             (guid, mdf) = await who_is_there(self, nickname)
 
             if (guid, mdf) != (None, None):
-                node = await Node.new(self, nickname, guid, mdf)
+                node = await Node.new(self, nickname, guid, mdf, updater)
                 self.nodes[nickname] = node

@@ -1,7 +1,7 @@
 import logging
 
 from .channel import Channel
-from .const import DOMAIN
+from .const import DOMAIN, SCANNER
 
 from .vscp.const import (CLASS_INFORMATION, EVENT_INFORMATION_ON, EVENT_INFORMATION_OFF)
 from .vscp.util import read_reg
@@ -15,22 +15,13 @@ IDENTIFIER = 'BS'
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    # Assign configuration variables.
-    # The configuration check takes care they are present.
-    #host = config[CONF_HOST]
-    #username = config[CONF_USERNAME]
-    #password = config.get(CONF_PASSWORD)
     if discovery_info is None:
+        #to do, add entries from configuration.yaml here
         return
-
-    # Setup connection with devices/cloud
-    gw = hass.data[DOMAIN]
-
-    for node in gw.nodes.values():
-        async_add_entities(node.get_channels(IDENTIFIER))
-
+    else:
+        for node in hass.data[DOMAIN][SCANNER].nodes.values():
+            async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
     return True
-
 
 class vscpBinarySensor(BinarySensorEntity, Channel):
     """Representation of an VSCP binary sensor."""
@@ -51,8 +42,8 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
-        await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
+        await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_ON, self._handle_onoff_event)
+        await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._handle_onoff_event)
 
     @property
     def is_on(self):

@@ -11,7 +11,7 @@ from homeassistant.components.light import (
 
 from .channel import Channel
 
-from .const import DOMAIN
+from .const import DOMAIN, SCANNER
 
 from .vscp.event import Event
 from .vscp.const import (CLASS_CONTROL, CLASS_INFORMATION,
@@ -26,19 +26,12 @@ IDENTIFIER = 'LI'
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    # Assign configuration variables.
-    # The configuration check takes care they are present.
-    #host = config[CONF_HOST]
-    #username = config[CONF_USERNAME]
-    #password = config.get(CONF_PASSWORD)
     if discovery_info is None:
+        #to do, add entries from configuration.yaml here
         return
-
-    # Setup connection with devices/cloud
-    gw = hass.data[DOMAIN]
-
-    for node in gw.nodes.values():
-        async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
+    else:
+        for node in hass.data[DOMAIN][SCANNER].nodes.values():
+            async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
     return True
 
 
@@ -64,13 +57,13 @@ class vscpLight(LightEntity, Channel):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_ON,
-                                          self._handle_onoff_event)
-        await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF,
-                                          self._handle_onoff_event)
+        await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_ON,
+                                              self._handle_onoff_event)
+        await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_OFF,
+                                              self._handle_onoff_event)
         if self._supports_brightness:
-            await self._node.bus.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_LEVEL,
-                                              self._handle_level_event)
+            await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_LEVEL,
+                                                  self._handle_level_event)
 
     @property
     def enabled(self):
@@ -129,7 +122,7 @@ class vscpLight(LightEntity, Channel):
         ev = Event(vscp_class=CLASS_CONTROL,
                    vscp_type=EVENT_CONTROL_TURN_ON,
                    data=struct.pack('>BBB', flash_cmd, self._zone, self._subzone))
-        await self._node.bus.send(ev)
+        await self._node.updater.send(ev)
 
         if self._supports_brightness and ATTR_BRIGHTNESS in kwargs:
             brightness = kwargs[ATTR_BRIGHTNESS]
@@ -141,7 +134,7 @@ class vscpLight(LightEntity, Channel):
             ev = Event(vscp_class=CLASS_CONTROL,
                        vscp_type=EVENT_CHANGE_LEVEL,
                        data=struct.pack('>BBB', brightness, self._zone, self._subzone))
-            await self._node.bus.send(ev)
+            await self._node.updater.send(ev)
 
     async def async_turn_off(self, **kwargs):
         """Instruct the light to turn off."""
@@ -149,7 +142,7 @@ class vscpLight(LightEntity, Channel):
         ev = Event(vscp_class=CLASS_CONTROL,
                    vscp_type=EVENT_CONTROL_TURN_OFF,
                    data=struct.pack('>BBB', 0, self._zone, self._subzone))
-        await self._node.bus.send(ev)
+        await self._node.updater.send(ev)
 
     @property
     def should_poll(self):
