@@ -9,10 +9,12 @@ from .gateway import Gateway
 from .light import vscpLight
 from .binary_sensor import vscpBinarySensor
 import homeassistant.helpers.config_validation as cv
-from .const import (DOMAIN, DEFAULT_HOST, DEFAULT_PORT, GATEWAY, SCANNER, SCANNER_TASK)
+from .const import (DOMAIN, DEFAULT_HOST, DEFAULT_PORT, GATEWAY, SCANNER, SCANNER_TASK,
+                    SVC_PRIORITY, SVC_TYPE, SVC_CLASS, SVC_DATA)
 import voluptuous as vol
 from .channel import channel_reg
 import asyncio
+from .vscp.event import Event
 
 import logging
 
@@ -35,6 +37,14 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA
 )
 
+SERVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(SVC_PRIORITY): int,
+        vol.Required(SVC_CLASS): int,
+        vol.Required(SVC_TYPE): int,
+        vol.Required(SVC_DATA): cv.string
+    }
+)
 
 async def async_do_discovery(hass, config, updater):
     logger.info('Starting VSCP discovery for HASS nodes.')
@@ -88,5 +98,13 @@ async def async_setup(hass, config):
 
     hass.helpers.discovery.load_platform('light', DOMAIN, None, config)
     hass.helpers.discovery.load_platform('binary_sensor', DOMAIN, None, config)
+
+    async def handle_send_event(call):
+        await gw.send(Event(vscp_class = call.data.get(SVC_CLASS),
+                            vscp_type = call.data.get(SVC_TYPE),
+                            head = call.data.get(SVC_PRIORITY)*32,
+                            data = bytearray([int(x,0) for x in call.data.get(SVC_DATA).split(',')])))
+
+    hass.services.async_register(DOMAIN, 'send_event', handle_send_event, SERVICE_SCHEMA)
 
     return True

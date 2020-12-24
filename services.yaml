@@ -1,0 +1,15 @@
+send_event:
+  description: Send a VSCP event
+  fields:
+    priority:
+      description: Priority, 0-7, 7=lowest priority
+      example: 7
+    class:
+      description: VSCP Class
+      example: 30
+    type:
+      description: VSCP Type
+      example: 5
+    data:
+      description: Data to send (max 8 bytes, comma separated)
+      example: [0, 1, 2]
