@@ -1,50 +1,125 @@
-# VSCP4HASS - framework to integrate VSCP nodes easily into Home Assistant
+# VSCP4HASS - VSCP communication for Home Assistant
 
-https://www.vscp.org
+Please also refer to:  
+https://www.vscp.org  
 https://www.home-assistant.io
+
+## Introduction
+VSCP4HASS connects to a running (u)vscpd instance and uses the TCP interface
+to communicate with VSCP nodes.
+
+uvscpd can be found here: https://www.github.com/mzanders/uvscpd
+
+VSCP4HASS uses asyncio interfaces exclusively. It uses an internal VSCP module to
+handle the communication protocol. This is not in line with the guidelines for 
+HASS integrations (the physical communication should be through a PyPi module).
+As this extension is still considered under development, I prefer to keep it 
+simple and stash everything together for now. In the future, I'll probably move
+to an MQTT interface making the external module obsolete anyway.
+
+VSCP4HASS provides:
+- a service (vscp.send_event) to send 'raw' VSCP events from HASS
+- a discovery service for 'standardised' VSCP HASS nodes for lights and binary
+  sensors
+- manual configuration of lights based on zones & subzones
+
+The discovery service searches for all level 1 nodes on a segment with standard
+device family code set to 'HASS'. These nodes have a modular & standardised register 
+layout.  This allows VSCP4HASS to read the entire configuration from the nodes 
+directly and avoids duplicating configuration information in the system.  
+This method uses the node GUID and channel index to identify individual entities.
+
+Example implementations of this standard device on CAN nodes can be found here:
+https://www.github.com/mzanders/swali
+
+To allow interfacing with existing VSCP networks and non-standardised nodes, 
+manual entry of lights is also supported. In this case, the zone and subzone are 
+used to control and monitor light entities. (Binary) sensor entities will be added
+shortly.
 
 ## Installation
 
-Copy or link this folder to `<config_dir>/custom_components/vscp/` for HASS.
+Copy, clone or link this folder to `<config_dir>/custom_components/vscp/` for your
+HASS instance. Note that when running HASS in a container, soft-links will not work.
 
-Add the following entry in your `configuration.yaml`:
+Add the following minimal configuration entry in your `configuration.yaml`:
 
 ```yaml
 vscp:
-    host: HOST_HERE
-    port: PORT_HERE
+  host: 127.0.0.1    # IP address of vscpd instance
 ```
 
-## Objective
-VSCP4HASS defines a standardized interface to VSCP nodes to implement generic
-entities that are defined in HASS. This allows easy expansion of a VSCP4HASS
-network without any configuration change on the HASS side by using a discovery
-mechanism.
+**NOTE that this connection is NOT SECURED and should only be used on
+localhost. So run (u)vscpd on the same host has HASS.** 
 
-TODO: in the future, manual addition of HASS entities which are tied to VSCP 
-events is foreseen!!
+## Configuration
+The full platform configuration is as follows:
+```yaml
+vscp:
+  host: 127.0.0.1
+  port: 8598
+  username: your_user
+  password: your_password
+  discovery: false
+```
+The only required field is the host address. The port is defaulting to the default
+(u)vscpd port.  
+Username/password is also optional as uvscpd can be configured without. If the option
+is not provided, the USER and PASSWORD TCP commands are not sent after connecting to
+the server.  
 
-The goals of VSCP4HASS are:
-- all configuration data is contained in the nodes, no separate config files are
-  required to describe/interface the system
-- HASS doesn't need to look up register addresses in the VSCP MDF
-- everything can be discovered on the initiative of HASS
-- changes on the VSCP network are automatically propagated to HASS
-- The VSCP event matching the most with the targeted function is used where
-  possible and practical.
+Set discovery to 'true' if you want HASS to scan for standardised nodes on the segment.
+It defaults to 'false'.
 
-VSCP4HASS uses asyncio interfaces exclusively. It uses an external Python module
-to communicate with a vscpd compatible instance.
+For manually entering lights in your 'configuration.yaml' file, use:
 
-## VSCP features used
-The following features of VSCP are used in order to meet the objectives above:
+```yaml
+light:
+  - platform: vscp
+    entities:
+      - name: red
+        zone: 1
+        subzone: 1
+      - name: green
+        zone: 1
+        subzone: 2
+```
+Duplicate entries for zone/subzone combinations are not allowed.
+
+Configuration entries are validated using voluptuous schema's, so you should
+get a sensible error message when there's an error. (Although not for the duplicates
+mentioned above...)
+
+## Manual entity configuration
+### Lights
+These VSCP events are sent or processed for manually configured lights:
+- **CLASS1.CONTROL, 0x1E - Type=0x05: TurnOn**  
+  Sent from HASS to the zone/subzone to turn on.  
+  Data byte 0 set to 0.
+
+- **CLASS1.CONTROL, 0x1E - Type=0x07: TurnOff**  
+  Sent from HASS to the zone/subzone to turn off.  
+  Data byte 0 set to 0.
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x03: On**    
+  Sent from the VSCP node when the light turns on.  
+  Zone/subzone is used to identify the light.  
+  Data byte 0 is ignored.
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x04: Off**    
+  Sent from the VSCP node when the light turns off.  
+  Zone/subzone is used to identify the light.  
+  Data byte 0 is ignored.
+
+
+## Discovery service for standardised entities
+
+The following features of VSCP are used in the discovery process:
 - "who's there" events are used to scan the bus and gather GUID's after starting.
 - Extended page register reads are used to read the device registers.
 - The standard device family code (starting address 0x9B) is set to "HASS" in
   UTF-8 encoding, this allows VSCP4HASS to scan a bus looking for compatible
   devices. Standard device type is set to all 0's and reserved for future use.
-- The number of pages in a VSCP4HASS node (register address 0x99 - deprecated by
-  VSCP) identifies the number of channels available on that node. Zero based.
 - Each channel is mapped to a single page of registers, starting from 0x0000.
 - The GUID for each node together with the channel number acts as the unique ID
   towards HASS.
@@ -60,177 +135,125 @@ functionalities. VSCP4HASS considers all registers as read-only. Configuration
 of the registers (using the MDF) has to happen with external tools.
 
 The first 2 registers of each channel act as an entity identifier, encoded as a
-2 bytes of ASCII code.
-Next is an enable register. If the channel is disabled, it will not be loaded
-into HASS.
+2 bytes of ASCII code. An entity identifier of all 0's marks the end of the
+register map.  
+Next is an enable register. If a light channel is disabled, it will not be loaded
+into HASS.  
 Further registers up to 0x0F define entity-dependent behaviour.
 Each channel can optionally have a configured name (max 16 bytes), depending on
 available non-volatile memory capacity in the node. Null-terminated in UTF-8.
 
-The remaining registers (0x20-0x7F) are free to be used by the implementer.
-For instance when implementing a binary sensor which receives push button
-status, one might have it automatically send turn on/off events to a light. 
+The remaining registers of the page (0x20-0x7F) are free to be used by the 
+implementer. For instance when implementing a binary sensor which receives push 
+button status, one might have it also send turn on/off events to a light. 
 Other examples are polarity inversions, built-in timers etc.
 
-## Home Assistant entities definitions
 ### Light
-https://developers.home-assistant.io/docs/core/entity/light
+https://developers.home-assistant.io/docs/core/entity/light  
 Light entities are input/output devices which control physical lights.
 Some advanced features are currently not supported (like effects) but might
 be added in the future.
 
-VSCP registers:
-    0x00-0x01: Identifier: "LI"
-    0x02: Enable (0=disabled)
-    0x03: capabilities flags
-      encoded as (currently identical as in HASS):
-      * 0x01: support brightness
-      * 0x02: support color temperature (NOT IMPLEMENTED, always 0)
-      * 0x04: support effect (NOT IMPLEMENTED, always 0)
-      * 0x08: support flash
-      * 0x10: support color (NOT IMPLEMENTED, always 0)
-      * 0x20: support transition (NOT IMPLEMENTED, always 0)
-      * 0x40: support white value (NOT IMPLEMENTED, always 0)
-    0x04: State (1=on)
-    0x05: VSCP zone for this light
-    0x06: VSCP subzone for this light
-    0x07: brightness value, 0-255
-    0x08-0x0F: reserved for future use
-    0x10-0x1F: light name, null terminated (all 0's if not used)
+####VSCP registers:
+- 0x00-0x01: Identifier: "LI"
+- 0x02: Enable (0=disabled)
+- 0x03: capabilities flags, encoded as (currently identical as in HASS):
+  * 0x01: support brightness
+  * 0x02: support color temperature (NOT IMPLEMENTED, always 0)
+  * 0x04: support effect (NOT IMPLEMENTED, always 0)
+  * 0x08: support flash
+  * 0x10: support color (NOT IMPLEMENTED, always 0)
+  * 0x20: support transition (NOT IMPLEMENTED, always 0)
+  * 0x40: support white value (NOT IMPLEMENTED, always 0)
+- 0x04: State (1=on)
+- 0x05: VSCP zone for this light
+- 0x06: VSCP subzone for this light
+- 0x07: brightness value, 0-255
+- 0x08-0x0F: reserved for future use
+- 0x10-0x1F: light name, null terminated (all 0's if not used)
 
-VSCP events:
-    CLASS1.CONTROL, 0x1E - Type=0x05: TurnOn
-      Sent from HASS to the zone/subzone (as read from the registers) 
-      to turn on. Data byte 0 indicates flashing mode: 
-         0=no flashing
-         1=short flash
-         2=long flash
-    CLASS1.CONTROL, 0x1E - Type=0x07: TurnOff
-      Sent from HASS to the zone/subzone (from registers) to turn off, data
-      byte 0 not used
-    CLASS1.CONTROL, 0x1E - Type=0x16: Change level
-      Sent from HASS to the zone/subzone to set dimmer value (0-255)
-      Note: this is used as opposed to the command "Dim lamp(s)"
-    CLASS1.INFORMATION, 0x14 - Type=0x03: On
-      Sent from the VSCP node when the light turns on. Data byte 0 is the
-      channel number of the VSCP node. Zone/subzone is ignored.
-    CLASS1.INFORMATION, 0x14 - Type=0x04 Off
-      Sent from the VSCP node when the light turns off. Data byte 0 is the
-      channel number of the VSCP node. Zone/subzone is ignored.
-    CLASS1.INFORMATION, 0x14 - Type=0x28 Level Changed
-      Sent from the VSCP node supporting brightness control to indicate its
-      new brightness level (0-255).
-      NOTE: the event data is NOT conforming to the VSCP spec, instead:
-         byte 0 = index of the channel
-         byte 1 = zone
-         byte 2 = subzone
-         byte 3 = new level
+####VSCP events:
+- **CLASS1.CONTROL, 0x1E - Type=0x05: TurnOn**  
+  Sent from HASS to the zone/subzone (as read from the registers) 
+  to turn on. Data byte 0 indicates flashing mode: 
+  - 0=no flashing
+  - 1=short flash
+  - 2=long flash
+
+- **CLASS1.CONTROL, 0x1E - Type=0x07: TurnOff**  
+  Sent from HASS to the zone/subzone (from registers) to turn off, data
+  byte 0 not used
+
+- **CLASS1.CONTROL, 0x1E - Type=0x16: Change level**    
+  Sent from HASS to the zone/subzone to set dimmer value (0-255)    
+  *Note: this is used as opposed to the command "Dim lamp(s)"*
+
+- **CLASS1.INFORMATION, 0x14 - Type=0x03: On**    
+  Sent from the VSCP node when the light turns on. Data byte 0 is the
+  channel number of the VSCP node. Zone/subzone is ignored.
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x04 Off**    
+  Sent from the VSCP node when the light turns off. Data byte 0 is the
+  channel number of the VSCP node. Zone/subzone is ignored.
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x28 Level Changed**    
+  Sent from the VSCP node supporting brightness control to indicate its
+  new brightness level (0-255).  
+  NOTE: the event data is NOT conforming to the VSCP spec, instead:
+  - byte 0 = index of the channel
+  - byte 1 = zone
+  - byte 2 = subzone
+  - byte 3 = new level
 
 ### Binary sensor
-https://developers.home-assistant.io/docs/core/entity/binary-sensor
+https://developers.home-assistant.io/docs/core/entity/binary-sensor  
 Binary sensors are input-only devices and only have an ON or OFF state. 
 Device classes are defined for sensors of a specific type, so they can be
-displayed with an appropriate icon in the HASS frontend. VSCP4HASS defines
-how each of those classes is implemented on VSCP.
+displayed with an appropriate icon in the HASS frontend.
 
-VSCP registers:
-    0x00-0x01: Identifier: "BS"
-    0x02: Enabled (0=disable)
-    0x03: State (1=on)
-    0x04: Class ID
-    0x05-0x0F: reserved for future use
-    0x10-0x1F: binary sensor name, null terminated (all 0's if not used)
+####VSCP registers:
+- 0x00-0x01: Identifier: "BS"
+- 0x02: Enabled (0=disable)
+- 0x03: State (1=on)
+- 0x04: Class ID - see below
+- 0x05-0x0F: reserved for future use
+- 0x10-0x1F: binary sensor name, null terminated (all 0's if not used)
 
-VSCP events:
-    The events from the table below are used for the respective class ID's
-    in each channel. Byte 0 always indicates the channel of the node which
-    is reporting the status. Zone/subzone information is ignored in VSCP4HASS
-    and can be used for other purposes.
+####Class ID mapping:
+| Class ID | HASS Device Class |
+|----------|-------------------|
+| 0x00     | generic           |
+| 0x01     | battery           |
+| 0x02     | battery_charging  |
+| 0x03     | cold              |
+| 0x04     | connectivity      |
+| 0x05     | door              |
+| 0x06     | garage_door       |
+| 0x07     | gas               |
+| 0x08     | heat              |
+| 0x08     | light             |
+| 0x09     | lock              |
+| 0x0A     | moisture          |
+| 0x0B     | motion            |
+| 0x0C     | moving            |
+| 0x0D     | occupancy         |
+| 0x0E     | opening           |
+| 0x0F     | plug              |
+| 0x10     | power             |
+| 0x11     | presence          |
+| 0x12     | problem           |
+| 0x13     | safety            |
+| 0x14     | smoke             |
+| 0x15     | sound             |
+| 0x16     | vibration         |
+| 0x17     | window            |
 
-Class ID - Class - VSCP event mapping - Work-in-progress
+####VSCP events:  
 
-This is a suggested mapping between HASS device classes and VSCP events.
-For now, only info ON and OFF events are used.
-
-| Class ID | HASS Device Class | VSCP Class  | ON event type       | OFF event type     | Notes                                           |
-|----------|-------------------|-------------|-------------------- |--------------------|-------------------------------------------------|
-| 0x00     | generic           | 0x20 - info | 0x03 - ON           | 0x04 - OFF         |                                                 |
-| 0x01     | battery           | 0x20 - info | 0x0A - Below limit  | 0x0B - Above limit | VSCP: add battery empty & OK events?            |
-| 0x02     | battery_charging  | 0x20 - info | 0x03 - ON           | 0x04 - OFF         | VSCP: maybe too specific to add charge events?  |
-| 0x03     | cold              | 0x02 - secu | 0x0C - Frost        | ???                | VSCP: no 'inactive' event                       |
-| 0x04     | connectivity      | 0x20 - info | 0x51 - Connect      | 0x52 - Disconnect  |                                                 |
-| 0x05     | door              | 0x02 - secu | 0x09 - Door contact | ???                | VSCP: no 'inactive' event                       |
-| 0x06     | garage_door       | 0x20 - info | 0x07 - Opened       | 0x08 - Closed      |                                                 |
-| 0x07     | gas               | 0x02 - secu | ???                 | ???                | VSCP: add generic gas sensor in security?       |
-| 0x08     | heat              | 0x02 - secu | 0x07 - Heat sensor  | ???                | VSCP: no 'inactive' event                       |
-| 0x08     | light             | 0x20 - info | 0x03 - ON           | 0x04 - OFF         |                                                 |
-| 0x09     | lock              | 0x20 - info | 0x4B - Lock         | 0x4C - Unlock      |                                                 |
-| 0x0A     | moisture          | 0x02 - secu | 0x10 - Water        | ???                | VSCP: no 'inactive' event                       |
-| 0x0B     | motion            | 0x02 - secu | 0x01 - Motion       | ???                | VSCP: no 'inactive' event                       |
-| 0x0C     | moving            | 0x20 - info | 0x03 - ON           | 0x04 - OFF         | VSCP: add 'in-motion' events?                   |
-| 0x0D     | occupancy         | 0x20 - info | 0x54 - Enter        | 0x55 - Exit        |                                                 |
-| 0x0E     | opening           | 0x20 - info | 0x07 - Opened       | 0x08 - Closed      |                                                 |
-| 0x0F     | plug              | 0x20 - info | 0x03 - ON           | 0x04 - OFF         |                                                 |
-| 0x10     | power             | 0x20 - info | 0x03 - ON           | 0x04 - OFF         |                                                 |
-| 0x11     | presence          | 0x20 - info | 0x54 - Enter        | 0x55 - Exit        |                                                 |
-| 0x12     | problem           | 0x20 - info | 0x29 - Warning      | ???                | VSCP: no 'inactive' event                       |
-| 0x13     | safety            | 0x02 - secu | 0x00 - Generic      | ???                | VSCP: no 'inactive' event                       |
-| 0x14     | smoke             | 0x02 - secu | 0x06 - Smoke sensor | ???                | VSCP: no 'inactive' event                       |
-| 0x15     | sound             | 0x02 - secu | 0x12 - Noise        | ???                | VSCP: no 'inactive' event                       |
-| 0x16     | vibration         | 0x02 - secu | 0x05 - Shock        | ???                | VSCP: no 'inactive' event                       |
-| 0x17     | window            | 0x02 - secu | 0x0A - Window       | ???                | VSCP: no 'inactive' event                       |
-
-
-### Sensor
-https://developers.home-assistant.io/docs/core/entity/sensor
-Sensors are read-only devices which report the magnitude for a physical
-property. Just like binary sensors, HASS defines device classes to report
-these values using appropriate representations. In addition, the unit being
-reported by VSCP is provided to HASS (TBD if this is required, it seems that
-unit handling is not really dealt with in HASS).
-
-VSCP registers:
-    0x00-0x01: Identifier: "SE"
-    0x02: Enabled (0=disable)
-    0x03: Class ID
-    0x04: Sensor ID
-    0x05: Generic
-    0x10-0x1F: binary sensor name, null terminated (all 0's if not used)
-
-VSCP events:
-    The CLASS1.MEASUREZONE is used to transmit measurement data. Byte 0 always
-    indicates	which channel of the node is reporting the value. Byte 1/2
-    (zone/subzone) is ignored by VSCP4HASS. The datacoding in byte 3 has 2 4bit
-    nibbles:
-	bit 0-3: VSCP unit ID for the value, as defined in VSCP spec
-	bit 4-7: Value encoding format as in VSCP:
-				0b0000: set of bits
-				0b0001: byte
-				0b0010: string (only 4chars..)
-				0b0011: signed integer
-				0x0100: normalized signed integer
-				0x0101: 32bit IEE754 float
-				0x1011: unsigned integer
-				0x1100: normalized unsigned integer			
-
-Class ID - Event - Unit mapping - Work-in-progress
-
-CLASS1.MEASUREMENTZONE (0x41) is used for all the sensor inputs. The mapping of
-class ID's to events is as follows:
-
-| Class ID | HASS device Class | VSCP event type         | Unit          | Notes                       |
-|----------|-------------------|-------------------------|---------------|-----------------------------|
-| 0x00     | generic           | 0x00 - General Event    | No units      |                             |
-| 0x01     | humidity          | 0x23 - Damp/moist       | 0-100%        | Relative humidity           |
-| 0x02     | illuminance       | 0x18 - Luminous Flux    | Lumen         | HASS mixes two types        |
-| 0x03     | signal_strength   | not supported!          | dB, dBm       | VSCP: add in spec?          |
-| 0x04     | temperature       | 0x06 - Temperature      | K, °C, F      |                             |
-| 0x05     | timestamp         | 0x04 - Time             | Seconds       | Unix epoch                  |
-| 0x06     | power             | 0x0E - Power            | Watt          |                             |
-| 0x07     | pressure          | 0x0C - Pressure         | Pa, Bar, Psi  |                             |
-| 0x08     | current           | 0x05 - Electric current | A             |                             |
-| 0x09     | energy            | 0x0D - Energy           | J, kWh, Wh    | VSCP: extend units in spec? |
-| 0x0A     | power_factor      | not supported!          | 0.0-1.0       | VSCP: add in spec?          |
-| 0x0B     | voltage           | 0x10 - Voltage          | V             |                             |
-
-
+- **CLASS1.INFORMATION, 0x14 - Type=0x03: On**    
+  Sent from the VSCP node when the sensor turns on. Data byte 0 is the
+  channel number of the VSCP node. Zone/subzone is ignored.
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x04 Off**    
+  Sent from the VSCP node when the sensor turns off. Data byte 0 is the
+  channel number of the VSCP node. Zone/subzone is ignored.
