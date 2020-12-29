@@ -71,7 +71,7 @@ the server.
 Set discovery to 'true' if you want HASS to scan for standardised nodes on the segment.
 It defaults to 'false'.
 
-For manually entering lights in your 'configuration.yaml' file, use:
+For manually entering lights in your `configuration.yaml` file, use:
 
 ```yaml
 light:
@@ -89,6 +89,15 @@ Duplicate entries for zone/subzone combinations are not allowed.
 Configuration entries are validated using voluptuous schema's, so you should
 get a sensible error message when there's an error. (Although not for the duplicates
 mentioned above...)
+
+For adding debug information to the logs, add this to `configuration.yaml`:
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.vscp: debug
+```
+
 
 ## Manual entity configuration
 ### Lights
@@ -124,10 +133,11 @@ The following features of VSCP are used in the discovery process:
 - The GUID for each node together with the channel number acts as the unique ID
   towards HASS.
 - Node heartbeats (CLASS1.Information, type 0x09) are used to determine if a
-  node is still connected.
+  node is still connected. (To be implemented!)
 - New node online messages (CLASS1.Protocol, type 0x02) are used to enable new
   or reconfigure existing nodes (ie after an external configuration change, a
-  reset should be forced on the node to refresh the status in HASS).
+  reset should be forced on the node to refresh the status in HASS). 
+  (To be implemented!)
 
 The first 32 (0x20) registers for each channel/page are defined for use by
 VSCP4HASS. The remainder of the page is available to implement other
@@ -154,7 +164,7 @@ Light entities are input/output devices which control physical lights.
 Some advanced features are currently not supported (like effects) but might
 be added in the future.
 
-####VSCP registers:
+#### VSCP registers:
 - 0x00-0x01: Identifier: "LI"
 - 0x02: Enable (0=disabled)
 - 0x03: capabilities flags, encoded as (currently identical as in HASS):
@@ -172,7 +182,7 @@ be added in the future.
 - 0x08-0x0F: reserved for future use
 - 0x10-0x1F: light name, null terminated (all 0's if not used)
 
-####VSCP events:
+#### VSCP events:
 - **CLASS1.CONTROL, 0x1E - Type=0x05: TurnOn**  
   Sent from HASS to the zone/subzone (as read from the registers) 
   to turn on. Data byte 0 indicates flashing mode: 
@@ -211,7 +221,7 @@ Binary sensors are input-only devices and only have an ON or OFF state.
 Device classes are defined for sensors of a specific type, so they can be
 displayed with an appropriate icon in the HASS frontend.
 
-####VSCP registers:
+#### VSCP registers:
 - 0x00-0x01: Identifier: "BS"
 - 0x02: Enabled (0=disable)
 - 0x03: State (1=on)
@@ -219,7 +229,7 @@ displayed with an appropriate icon in the HASS frontend.
 - 0x05-0x0F: reserved for future use
 - 0x10-0x1F: binary sensor name, null terminated (all 0's if not used)
 
-####Class ID mapping:
+#### Class ID mapping:
 | Class ID | HASS Device Class |
 |----------|-------------------|
 | 0x00     | generic           |
@@ -248,7 +258,7 @@ displayed with an appropriate icon in the HASS frontend.
 | 0x16     | vibration         |
 | 0x17     | window            |
 
-####VSCP events:  
+#### VSCP events:  
 
 - **CLASS1.INFORMATION, 0x14 - Type=0x03: On**    
   Sent from the VSCP node when the sensor turns on. Data byte 0 is the
