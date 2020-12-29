@@ -96,9 +96,6 @@ async def async_setup(hass, config):
                 await task
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, on_hass_stop)
 
-    hass.helpers.discovery.load_platform('light', DOMAIN, None, config)
-    hass.helpers.discovery.load_platform('binary_sensor', DOMAIN, None, config)
-
     async def handle_send_event(call):
         await gw.send(Event(vscp_class = call.data.get(SVC_CLASS),
                             vscp_type = call.data.get(SVC_TYPE),
