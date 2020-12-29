@@ -9,9 +9,10 @@ CHANNEL_TYPE_SIZE = 2
 
 class Node:
     @classmethod
-    async def new(cls, bus, nickname, guid=None, mdf=None):
+    async def new(cls, bus, nickname, guid=None, mdf=None, updater=None):
         self = cls()
         self.bus = bus
+        self.updater = updater
         self.nickname = nickname
         self.guid = guid
         self.stddev = await read_std_reg(bus, nickname, STD_REG_STD_DEV)
