@@ -1,7 +1,12 @@
 import logging
 import struct
+import voluptuous as vol
+import homeassistant.helpers.config_validation as cv
+from homeassistant.const import (CONF_ENTITIES, CONF_NAME, CONF_ZONE)
+
 
 from homeassistant.components.light import (
+    PLATFORM_SCHEMA,
     ATTR_BRIGHTNESS,
     ATTR_FLASH,
     SUPPORT_BRIGHTNESS,
@@ -11,7 +16,7 @@ from homeassistant.components.light import (
 
 from .channel import Channel
 
-from .const import DOMAIN, SCANNER
+from .const import DOMAIN, GATEWAY, SCANNER, CONF_SUBZONE
 
 from .vscp.event import Event
 from .vscp.const import (CLASS_CONTROL, CLASS_INFORMATION,
@@ -24,15 +29,96 @@ logger = logging.getLogger(__name__)
 
 IDENTIFIER = 'LI'
 
+DEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required('name'): str,
+        vol.Required('zone'): int,
+        vol.Required('subzone'): int,
+    }
+)
+
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Required(CONF_ENTITIES): [DEVICE_SCHEMA],
+    }
+)
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     if discovery_info is None:
-        #to do, add entries from configuration.yaml here
-        return
+        u = hass.data[DOMAIN][GATEWAY]
+        async_add_entities([zoneLight(u, e.get(CONF_NAME), e.get(CONF_ZONE), e.get(CONF_SUBZONE)) for e in config.get(CONF_ENTITIES)])
+        logger.debug('VSCP adding zone lights: [{}]'.format(','.join([e.get(CONF_NAME) for e in config.get(CONF_ENTITIES)])))
     else:
         for node in hass.data[DOMAIN][SCANNER].nodes.values():
             async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
     return True
+
+
+class zoneLight(LightEntity):
+    def __init__(self, updater, name, zone, subzone):
+        self._updater = updater
+        self._name = name
+        self._zone = zone
+        self._subzone = subzone
+        self._enabled = False
+        self._state = False
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        await self._updater.sub_zone_event(CLASS_INFORMATION, EVENT_INFORMATION_ON, self._zone, self._subzone, self._handle_onoff_event)
+        await self._updater.sub_zone_event(CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._zone, self._subzone, self._handle_onoff_event)
+
+    @property
+    def enabled(self):
+        return self._enabled
+
+    @property
+    def unique_id(self):
+        return "LI-{}-{}-{}".format(self._name, self._zone, self._subzone)
+
+    @property
+    def name(self):
+        """Return the display name of this light."""
+        return self._name
+
+    # when a node goes offline, we can disable it's channels
+    @property
+    def available(self):
+        return True
+
+    @property
+    def should_poll(self):
+        return False
+
+    @classmethod
+    def identifier(cls):
+        return IDENTIFIER
+
+    @property
+    def is_on(self):
+        """Return true if light is on."""
+        return self._state
+
+    async def async_turn_on(self, **kwargs):
+        """Instruct the light to turn on."""
+        logger.debug('Turning on {}'.format(self._name))
+        ev = Event(vscp_class=CLASS_CONTROL,
+                   vscp_type=EVENT_CONTROL_TURN_ON,
+                   data=struct.pack('>BBB', 0, self._zone, self._subzone))
+        await self._updater.send(ev)
+
+    async def async_turn_off(self, **kwargs):
+        """Instruct the light to turn off."""
+        logger.debug('Turning off {}'.format(self.name))
+        ev = Event(vscp_class=CLASS_CONTROL,
+                   vscp_type=EVENT_CONTROL_TURN_OFF,
+                   data=struct.pack('>BBB', 0, self._zone, self._subzone))
+        await self._updater.send(ev)
+
+    async def _handle_onoff_event(self, event):
+        logger.debug('Got on/off for {}'.format(self.name))
+        self._state = (event.vscp_type == EVENT_INFORMATION_ON)
+        self.async_schedule_update_ha_state()
 
 
 class vscpLight(LightEntity, Channel):
