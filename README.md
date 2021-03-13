@@ -112,6 +112,10 @@ These VSCP events are sent or processed for manually configured lights:
   Sent from HASS to the zone/subzone to turn off.  
   Data byte 0 set to 0.
   
+- **CLASS1.CONTROL, 0x1E - Type=0x16: Change level**    
+  Sent from HASS to the zone/subzone to set dimmer value (0-255) when brightness control is enabled.
+  *Note: this is used as opposed to the command "Dim lamp(s)"*
+  
 - **CLASS1.INFORMATION, 0x14 - Type=0x03: On**    
   Sent from the VSCP node when the light turns on.  
   Zone/subzone is used to identify the light.  
@@ -121,8 +125,16 @@ These VSCP events are sent or processed for manually configured lights:
   Sent from the VSCP node when the light turns off.  
   Zone/subzone is used to identify the light.  
   Data byte 0 is ignored.
-
-
+  
+- **CLASS1.INFORMATION, 0x14 - Type=0x28 Level Changed**    
+  Sent from the VSCP node supporting brightness control to indicate its
+  new brightness level (0-255).  
+  NOTE: the event data is NOT conforming to the VSCP spec, instead:
+  - byte 0 = index of the channel
+  - byte 1 = zone
+  - byte 2 = subzone
+  - byte 3 = new level
+  
 ## Discovery service for standardised entities
 
 The following features of VSCP are used in the discovery process:
