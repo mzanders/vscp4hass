@@ -83,8 +83,10 @@ light:
       - name: green
         zone: 1
         subzone: 2
+        brightness: true
 ```
 Duplicate entries for zone/subzone combinations are not allowed.
+The brightness entry defaults to false. If true, it allows brightness control for that light.
 
 Configuration entries are validated using voluptuous schema's, so you should
 get a sensible error message when there's an error. (Although not for the duplicates

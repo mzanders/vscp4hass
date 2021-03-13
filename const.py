@@ -8,6 +8,7 @@ SCANNER_TASK = 'scanner_task'
 SCANNER = 'scanner'
 
 CONF_SUBZONE = 'subzone'
+CONF_BRIGHTNESS = 'brightness'
 
 SVC_PRIORITY = 'priority'
 SVC_TYPE = 'type'
