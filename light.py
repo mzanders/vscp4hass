@@ -138,7 +138,7 @@ class zoneLight(LightEntity):
             ev = Event(vscp_class=CLASS_CONTROL,
                        vscp_type=EVENT_CHANGE_LEVEL,
                        data=struct.pack('>BBB', brightness, self._zone, self._subzone))
-            await self._node.updater.send(ev)
+            await self._updater.send(ev)
 
     async def async_turn_off(self, **kwargs):
         """Instruct the light to turn off."""
@@ -147,6 +147,12 @@ class zoneLight(LightEntity):
                    vscp_type=EVENT_CONTROL_TURN_OFF,
                    data=struct.pack('>BBB', 0, self._zone, self._subzone))
         await self._updater.send(ev)
+
+        if self._supports_brightness:
+            ev = Event(vscp_class=CLASS_CONTROL,
+                       vscp_type=EVENT_CHANGE_LEVEL,
+                       data=struct.pack('>BBB', 0, self._zone, self._subzone))
+            await self._updater.send(ev)
 
     async def _handle_onoff_event(self, event):
         logger.debug('Got on/off for {}'.format(self.name))
