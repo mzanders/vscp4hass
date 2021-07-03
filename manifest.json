@@ -3,6 +3,7 @@
   "name": "VSCP",
   "documentation": "https://github.com/mzanders/vscp4hass",
   "config_flow": false,
+  "version": "0.0.1",
   "dependencies": [],
   "codeowners": [],
   "requirements": []
