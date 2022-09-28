@@ -75,8 +75,7 @@ class zoneLight(LightEntity):
         await self._updater.sub_zone_event(CLASS_INFORMATION, EVENT_INFORMATION_ON, self._zone, self._subzone, self._handle_onoff_event)
         await self._updater.sub_zone_event(CLASS_INFORMATION, EVENT_INFORMATION_OFF, self._zone, self._subzone, self._handle_onoff_event)
         if self._supports_brightness:
-            await self._node.updater.sub_ch_event(self._node.nickname, self._channel, CLASS_INFORMATION, EVENT_INFORMATION_LEVEL,
-                                                  self._handle_level_event)
+            await self._updater.sub_zone_event(CLASS_INFORMATION, EVENT_INFORMATION_LEVEL, self._zone, self._subzone, self._handle_level_event)
 
     @property
     def enabled(self):
