@@ -35,7 +35,7 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
         self._enabled = (registers[0x03] != 0x00)
         self._state = (registers[0x04] != 0x00)
         self._class_id = int(registers[0x05])
-        self._name = registers[16:33].decode().rstrip('/x0')
+        self._name = registers[16:33].decode(errors="ignore").rstrip("\x00")
         self.entity_id = "binary_sensor.vscp.{}.{}".format(self._node.guid, self._channel)
 
         return self
@@ -90,7 +90,6 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
             0x05 : 'door',
             0x06 : 'garage_door',
             0x07 : 'gas',
-            0x08 : 'heat',
             0x08 : 'light',
             0x09 : 'lock',
             0x0A : 'moisture',
@@ -106,6 +105,7 @@ class vscpBinarySensor(BinarySensorEntity, Channel):
             0x14 : 'smoke',
             0x15 : 'sound',
             0x16 : 'vibration',
-            0x17 : 'window'
+            0x17 : 'window',
+            0x18 : 'heat'
         }
         return class_map[self._class_id] if self._class_id in class_map else 'generic'

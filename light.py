@@ -11,7 +11,8 @@ from homeassistant.components.light import (
     ATTR_FLASH,
     SUPPORT_BRIGHTNESS,
     SUPPORT_FLASH,
-    LightEntity
+    LightEntity,
+    LightEntityFeature
 )
 
 from .channel import Channel
@@ -87,11 +88,18 @@ class zoneLight(LightEntity):
         return "LI-{}-{}-{}".format(self._name, self._zone, self._subzone)
 
     @property
-    def supported_features(self):
-        _c = 0
+    def supported_color_modes(self):
+        modes = set()
         if self._supports_brightness:
-            _c |= SUPPORT_BRIGHTNESS
-        return _c
+            modes.add("brightness")
+        else:
+            modes.add("onoff")
+        return modes
+
+    def color_mode(self):
+        if self._supports_brightness:
+            return "brightness"
+        return "onoff"
 
     @property
     def brightness(self):
@@ -180,7 +188,7 @@ class vscpLight(LightEntity, Channel):
         self._zone = int(registers[0x06])
         self._subzone = int(registers[0x07])
         self._brightness = int(registers[0x08])
-        self._name = registers[16:33].decode().rstrip('/x0')
+        self._name = registers[16:33].decode(errors="ignore").rstrip("\x00")
         self.entity_id = "light.vscp.{}.{}".format(self._node.guid, self._channel)
         return self
 
@@ -221,13 +229,25 @@ class vscpLight(LightEntity, Channel):
         return IDENTIFIER
 
     @property
-    def supported_features(self):
-        _c = 0
+    def supported_color_modes(self):
+        modes = set()
         if self._supports_brightness:
-            _c |= SUPPORT_BRIGHTNESS
-        if self._supports_flash:
-            _c |= SUPPORT_FLASH
-        return _c
+            modes.add("brightness")
+        else:
+            modes.add("onoff")
+        return modes
+
+    def color_mode(self):
+        if self._supports_brightness:
+            return "brightness"
+        return "onoff"
+
+@property
+def supported_features(self) -> LightEntityFeature:
+    features = LightEntityFeature(0)
+    if self._supports_flash:
+        features |= LightEntityFeature.FLASH
+    return features
 
     @property
     def brightness(self):
@@ -272,10 +292,6 @@ class vscpLight(LightEntity, Channel):
                    vscp_type=EVENT_CONTROL_TURN_OFF,
                    data=struct.pack('>BBB', 0, self._zone, self._subzone))
         await self._node.updater.send(ev)
-
-    @property
-    def should_poll(self):
-        return False
 
     async def _handle_onoff_event(self, event):
         logger.debug('Got on/off for {}'.format(self.name))

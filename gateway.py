@@ -39,7 +39,6 @@ class Gateway(TCP):
                 await self._channel_events[ch_key](event)  # do the callback
 
         if len(event.data) >= 2:
-            print('got event!')
             zone_key = (event.data[1], event.data[2], event.vscp_class, event.vscp_type)
             if zone_key in self._zone_events:
                 await self._zone_events[zone_key](event)  # do the callback

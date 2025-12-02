@@ -254,7 +254,6 @@ displayed with an appropriate icon in the HASS frontend.
 | 0x05     | door              |
 | 0x06     | garage_door       |
 | 0x07     | gas               |
-| 0x08     | heat              |
 | 0x08     | light             |
 | 0x09     | lock              |
 | 0x0A     | moisture          |
@@ -271,6 +270,7 @@ displayed with an appropriate icon in the HASS frontend.
 | 0x15     | sound             |
 | 0x16     | vibration         |
 | 0x17     | window            |
+| 0x18     | heat              |
 
 #### VSCP events:  
 
