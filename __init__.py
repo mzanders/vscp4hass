@@ -4,6 +4,8 @@ from homeassistant.const import (EVENT_HOMEASSISTANT_STOP,
                                  CONF_USERNAME,
                                  CONF_PASSWORD,
                                  CONF_DISCOVERY)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from .gateway import Gateway
 from .light import vscpLight
@@ -17,25 +19,14 @@ import asyncio
 from .vscp.event import Event
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 """Support for VSCP in HASS."""
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Required(CONF_HOST): cv.string,
-                vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
-                vol.Optional(CONF_USERNAME): cv.string,
-                vol.Optional(CONF_PASSWORD): cv.string,
-                vol.Optional(CONF_DISCOVERY, default=False): cv.boolean
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA
-)
+async def async_do_discovery(scanner: Gateway, updater: Gateway):
+    await scanner.connect()
+    await scanner.scan(updater)
+    await scanner.close()
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -46,62 +37,79 @@ SERVICE_SCHEMA = vol.Schema(
     }
 )
 
-async def async_do_discovery(hass, config, updater):
-    logger.info('Starting VSCP discovery for HASS nodes.')
-    conf = config.get(DOMAIN)
-    host = conf.get(CONF_HOST)
-    port = conf.get(CONF_PORT)
-    user = conf.get(CONF_USERNAME)
-    password = conf.get(CONF_PASSWORD)
+# -------------------------------
+# Config Entry setup
+# -------------------------------
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Set up VSCP via Config Entry (UI)."""
+    host = entry.data.get(CONF_HOST)
+    port = entry.data.get(CONF_PORT)
+    user = entry.data.get(CONF_USERNAME)
+    password = entry.data.get(CONF_PASSWORD)
 
-    scanner = Gateway(host=host, port=port, user=user, password=password)
-    hass.data[DOMAIN][SCANNER] = scanner
-    await scanner.connect()
-    await scanner.scan(updater)
-
-    hass.helpers.discovery.load_platform('light', DOMAIN, {}, config)
-    hass.helpers.discovery.load_platform('binary_sensor', DOMAIN, {}, config)
-
-    await scanner.close()
-
-
-async def async_setup(hass, config):
-    """controller setup code"""
-    conf = config.get(DOMAIN)
-    host = conf.get(CONF_HOST)
-    port = conf.get(CONF_PORT)
-    user = conf.get(CONF_USERNAME)
-    password = conf.get(CONF_PASSWORD)
-
-    hass.data[DOMAIN] = dict()
+    hass.data.setdefault(DOMAIN, {})
 
     gw = Gateway(host=host, port=port, user=user, password=password)
+    scanner = Gateway(host=host, port=port, user=user, password=password)
     await gw.connect()
     await gw.start_update()
     hass.data[DOMAIN][GATEWAY] = gw
+    hass.data[DOMAIN][SCANNER] = scanner
 
-    if conf.get(CONF_DISCOVERY):
-        hass.data[DOMAIN][SCANNER_TASK] = asyncio.create_task(async_do_discovery(hass, config, gw))
-
+    # Close gracefully on HA stop
     async def on_hass_stop(event):
-        """Close connection when hass stops."""
         await gw.close()
-        if SCANNER_TASK in hass.data[DOMAIN]:
-            task = hass.data[DOMAIN][SCANNER_TASK]
-            if task is not None:
-                try:
-                    task.cancel()
-                except asyncio.CancelledError:
-                    pass
+        task = hass.data[DOMAIN].get(SCANNER_TASK)
+        if task:
+            task.cancel()
+            try:
                 await task
+            except asyncio.CancelledError:
+                pass
+
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, on_hass_stop)
 
+    # Register send_event service
     async def handle_send_event(call):
-        await gw.send(Event(vscp_class = call.data.get(SVC_CLASS),
-                            vscp_type = call.data.get(SVC_TYPE),
-                            head = call.data.get(SVC_PRIORITY)*32,
-                            data = bytearray([int(x,0) for x in call.data.get(SVC_DATA).split(',')])))
+        await gw.send(
+            Event(
+                vscp_class=call.data.get(SVC_CLASS),
+                vscp_type=call.data.get(SVC_TYPE),
+                head=call.data.get(SVC_PRIORITY) * 32,
+                data=bytearray([int(x, 0) for x in call.data.get(SVC_DATA).split(",")])
+            )
+        )
 
-    hass.services.async_register(DOMAIN, 'send_event', handle_send_event, SERVICE_SCHEMA)
+    hass.services.async_register(DOMAIN, "send_event", handle_send_event, SERVICE_SCHEMA)
+
+    await hass.config_entries.async_forward_entry_setups(entry, ["light", "binary_sensor"])
+    hass.data[DOMAIN][SCANNER_TASK] = asyncio.create_task(async_do_discovery(scanner, gw))
 
     return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Unload VSCP integration (Config Entry)."""
+    gw = hass.data[DOMAIN].get(GATEWAY)
+    if gw:
+        await gw.close()
+
+    # Cancel scanner task
+    task = hass.data[DOMAIN].get(SCANNER_TASK)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    unload_ok = True
+    for platform in ["light", "binary_sensor"]:
+        result = await hass.config_entries.async_forward_entry_unload(entry, platform)
+        unload_ok = unload_ok and result
+
+    hass.data[DOMAIN].pop(GATEWAY, None)
+    hass.data[DOMAIN].pop(SCANNER, None)
+    hass.data[DOMAIN].pop(SCANNER_TASK, None)
+
+    return unload_ok

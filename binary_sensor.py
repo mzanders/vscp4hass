@@ -1,5 +1,3 @@
-import logging
-
 from .channel import Channel
 from .const import DOMAIN, SCANNER
 
@@ -9,19 +7,20 @@ from .vscp.util import read_reg
 from homeassistant.components.binary_sensor import (BinarySensorEntity)
 from homeassistant.const import STATE_OFF, STATE_ON
 
-_LOGGER = logging.getLogger(__name__)
+import logging
+logger = logging.getLogger(__name__)
 
 IDENTIFIER = 'BS'
 
+async def async_setup_entry(hass, entry, async_add_entities):
+    # Register a callback so nodes can add entities dynamically
+    async def add_new_channel(channel):
+        logger.debug("Add VSCP BS via discovery: %s", channel._name)
+        async_add_entities([channel])
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    if discovery_info is None:
-        #to do, add entries from configuration.yaml here
-        return
-    else:
-        for node in hass.data[DOMAIN][SCANNER].nodes.values():
-            async_add_entities([ch for ch in node.get_channels(IDENTIFIER) if ch.enabled])
-    return True
+    hass.data[DOMAIN][SCANNER].register_entity_callback(IDENTIFIER, add_new_channel)
+
+    async_add_entities([])
 
 class vscpBinarySensor(BinarySensorEntity, Channel):
     """Representation of an VSCP binary sensor."""

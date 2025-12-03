@@ -4,6 +4,8 @@ from .vscp.tcp import TCP
 from .vscp.filter import Filter
 from .node import Node
 
+import logging
+logger = logging.getLogger(__name__)
 
 class DuplicateEvent(Exception):
     pass
@@ -19,6 +21,25 @@ class Gateway(TCP):
         self.ch = dict() # list of channels for each channel class
         self._channel_events = dict() # event sensitivity list, key = event type+guid+index, value = list of callbacks to call
         self._zone_events = dict()
+        self._entity_callbacks = {}
+
+    def register_entity_callback(self, channel_type: str, callback):
+        """Register a callback to be fired when new channels are discovered."""
+        if channel_type not in self._entity_callbacks:
+            self._entity_callbacks[channel_type] = []
+        self._entity_callbacks[channel_type].append(callback)
+
+    async def _notify_new_channels(self, node):
+        for ch_type, callbacks in self._entity_callbacks.items():
+            # node.get_channels returns list of channel instances
+            logger.debug("channel type %s", ch_type)
+            for ch in node.get_channels(ch_type):
+                if not ch.enabled:
+                    continue
+
+                for cb in callbacks:
+                    # platform-provided callback, usually wraps async_add_entities
+                    await cb(ch)
 
     async def sub_ch_event(self, nickname, index, vscp_class, vscp_type, callback):
         key = (nickname, index, vscp_class, vscp_type)
@@ -59,5 +80,8 @@ class Gateway(TCP):
             (guid, mdf) = await who_is_there(self, nickname)
 
             if (guid, mdf) != (None, None):
+                logger.debug("Found node %s", nickname)
                 node = await Node.new(self, nickname, guid, mdf, updater)
                 self.nodes[nickname] = node
+                await self._notify_new_channels(node)
+

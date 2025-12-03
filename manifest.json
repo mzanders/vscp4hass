@@ -2,9 +2,11 @@
   "domain": "vscp",
   "name": "VSCP",
   "documentation": "https://github.com/mzanders/vscp4hass",
-  "config_flow": false,
-  "version": "0.0.1",
+  "config_flow": true,
+  "version": "0.0.2",
   "dependencies": [],
-  "codeowners": [],
-  "requirements": []
+  "codeowners": ["@mzanders"],
+  "requirements": [],
+  "loggers": ["vscp"],
+  "platforms": ["light", "binary_sensor"]
 }
